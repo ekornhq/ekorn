@@ -1,0 +1,19 @@
+{
+  "name": "ekorn",
+  "interface": {
+    "displayName": "ekorn"
+  },
+  "plugins": [
+    {
+      "name": "ekorn",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "productivity"
+    }
+  ]
+}

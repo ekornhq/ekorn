@@ -1,0 +1,18 @@
+{
+  "name": "ekorn",
+  "description": "Lossless, recallable tool-output packing for coding agents",
+  "owner": {
+    "name": "ekornhq",
+    "url": "https://github.com/ekornhq"
+  },
+  "plugins": [
+    {
+      "name": "ekorn",
+      "source": "./plugins/claude",
+      "description": "Keeps large Bash/Read outputs out of the context window: stored verbatim on disk, summarised exactly, recalled on demand. Adds edit_then_run / write_then_run / obs_recall MCP tools and a log-reducer agent.",
+      "version": "0.0.1",
+      "category": "productivity",
+      "tags": ["tokens", "context", "hooks", "mcp", "observability"]
+    }
+  ]
+}

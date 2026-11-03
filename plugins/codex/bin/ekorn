@@ -1,0 +1,27 @@
+#!/bin/sh
+# ekorn launcher shim.
+# Delegates every invocation to the ekorn core binary when it is installed.
+# Without the core: hooks pass through unchanged (empty output, exit 0) so the
+# agent keeps working exactly as before; anything else explains how to install.
+set -u
+
+home="${EKORN_HOME:-$HOME/.ekorn}"
+core="${EKORN_CORE:-$home/bin/ekorn-core}"
+
+if [ -x "$core" ]; then
+  exec "$core" "$@"
+fi
+
+case "${1:-}" in
+  hook)
+    exit 0 ;;
+  --version|-V|version)
+    echo "ekorn shim 0.0.1 (core not installed)"
+    exit 0 ;;
+esac
+
+printf '%s\n' \
+  "ekorn: core binary not found at $core" \
+  "Download it from https://github.com/ekornhq/ekorn/releases, make it executable," \
+  "and place it there, or point EKORN_CORE at it." >&2
+exit 2

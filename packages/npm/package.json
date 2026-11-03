@@ -1,0 +1,24 @@
+{
+  "name": "ekorn",
+  "version": "0.0.1",
+  "description": "Lossless, recallable tool-output packing for coding agents (CLI launcher)",
+  "license": "MIT",
+  "author": "ekornhq",
+  "homepage": "https://github.com/ekornhq/ekorn",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ekornhq/ekorn.git",
+    "directory": "packages/npm"
+  },
+  "bugs": "https://github.com/ekornhq/ekorn/issues",
+  "keywords": ["agent", "llm", "tokens", "context", "claude-code", "codex", "cli"],
+  "bin": {
+    "ekorn": "bin/ekorn.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

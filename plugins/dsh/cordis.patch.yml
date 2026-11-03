@@ -1,0 +1,6 @@
+# Activated when a dsh profile adds the dsh-ekorn bundle.
+- insert:
+    - id: ekorn
+      name: dsh-ekorn
+      config:
+        thresholdBytes: 16384

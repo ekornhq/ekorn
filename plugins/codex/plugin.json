@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ekorn",
+  "version": "0.0.1",
+  "description": "Lossless, recallable tool-output packing for Codex: large shell outputs are stored verbatim on your machine and replaced in context by an exact summary that can be recalled line by line.",
+  "author": {
+    "name": "ekornhq",
+    "url": "https://github.com/ekornhq"
+  },
+  "homepage": "https://github.com/ekornhq/ekorn",
+  "repository": "https://github.com/ekornhq/ekorn",
+  "license": "MIT",
+  "keywords": ["tokens", "context", "hooks", "mcp", "observability"],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "interface": {
+        "displayName": "ekorn",
+        "shortDescription": "Keep large tool outputs out of the context window, recall them exactly when needed.",
+        "developerName": "ekornhq",
+        "websiteURL": "https://github.com/ekornhq/ekorn"
+      }
+    }
+  }
+}
