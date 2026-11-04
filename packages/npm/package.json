@@ -1,6 +1,6 @@
 {
   "name": "ekorn",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Lossless, recallable tool-output packing for coding agents (CLI launcher)",
   "license": "MIT",
   "author": "ekornhq",

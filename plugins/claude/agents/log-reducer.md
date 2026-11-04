@@ -17,7 +17,8 @@ model: haiku
 
 ## 流程
 
-1. 用 `wc -l`、`grep -n`、`sed -n` 读源（大文件不要整份 `cat`）。若给的是 `obs_id`，先 `ekorn recall <id> --grep '<pattern>'`。
+1. 用 `wc -l`、`grep -n`、`sed -n` 读源（大文件不要整份 `cat`）。若给的是 `obs_id`，先 `ekorn recall <id> --grep '<pattern>'`
+   （`ekorn` 不在 PATH 时用 `~/.ekorn/bin/ekorn-core recall …`）。
 2. 把回执写成 JSON 文件：
    ```json
    {"status":"success|failure","uncertain":false,

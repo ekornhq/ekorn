@@ -1,7 +1,7 @@
 {
   "name": "ekorn",
-  "version": "0.0.1",
-  "description": "Lossless, recallable tool-output packing for Claude Code: large Bash/Read outputs are stored verbatim on your machine and replaced in context by an exact summary that can be recalled line by line.",
+  "version": "0.1.0",
+  "description": "Lossless, recallable tool-output packing for Claude Code: large Bash/Read outputs are stored verbatim on your machine and replaced in context by an exact summary that can be recalled line by line. Includes a local usage report and evidence-backed policy tuning.",
   "author": {
     "name": "ekornhq",
     "url": "https://github.com/ekornhq"

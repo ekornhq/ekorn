@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "ekorn",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Lossless, recallable tool-output packing for Codex: large shell outputs are stored verbatim on your machine and replaced in context by an exact summary that can be recalled line by line.",
   "author": {
     "name": "ekornhq",

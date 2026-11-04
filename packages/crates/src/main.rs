@@ -30,8 +30,20 @@ fn core_path() -> PathBuf {
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let core = core_path();
+    let have_core = core.is_file();
 
-    if core.is_file() {
+    // --version prints both halves so a bug report can say which core and which shim are in play.
+    if matches!(args.first().map(String::as_str), Some("--version") | Some("-V") | Some("version")) {
+        if have_core {
+            let _ = Command::new(&core).arg("--version").status();
+        } else {
+            println!("ekorn-core: not installed (expected at {})", core.display());
+        }
+        println!("ekorn shim {} (crates.io)", VERSION);
+        process::exit(0);
+    }
+
+    if have_core {
         match Command::new(&core).args(&args).status() {
             Ok(status) => process::exit(status.code().unwrap_or(1)),
             Err(e) => {
@@ -41,17 +53,12 @@ fn main() {
         }
     }
 
-    match args.first().map(String::as_str) {
-        Some("hook") => process::exit(0),
-        Some("--version") | Some("-V") | Some("version") => {
-            println!("ekorn shim {} (core not installed)", VERSION);
-            process::exit(0);
-        }
-        _ => {}
+    if args.first().map(String::as_str) == Some("hook") {
+        process::exit(0);
     }
 
     eprintln!(
-        "ekorn: core binary not found at {}\nDownload it from {}, make it executable, and place it there, or point EKORN_CORE at it.",
+        "ekorn: core binary not found at {}\nDownload ekorn-core for your platform from {}, verify it against sha256sums.txt,\nmake it executable and place it there, or point EKORN_CORE at it.",
         core.display(),
         RELEASES
     );

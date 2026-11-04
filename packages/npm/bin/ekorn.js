@@ -24,19 +24,26 @@ function executable(p) {
   }
 }
 
-if (executable(core)) {
+const haveCore = executable(core);
+
+// --version prints both halves so a bug report can say which core and which shim are in play.
+if (['--version', '-V', 'version'].includes(args[0])) {
+  if (haveCore) spawnSync(core, ['--version'], { stdio: 'inherit' });
+  else console.log(`ekorn-core: not installed (expected at ${core})`);
+  console.log(`ekorn shim ${VERSION} (npm)`);
+  process.exit(0);
+}
+
+if (haveCore) {
   const r = spawnSync(core, args, { stdio: 'inherit' });
   process.exit(r.status === null ? 1 : r.status);
 }
 
 if (args[0] === 'hook') process.exit(0);
-if (['--version', '-V', 'version'].includes(args[0])) {
-  console.log(`ekorn shim ${VERSION} (core not installed)`);
-  process.exit(0);
-}
 
 console.error(
   `ekorn: core binary not found at ${core}\n` +
-    `Download it from ${RELEASES}, make it executable, and place it there, or point EKORN_CORE at it.`,
+    `Download ekorn-core for your platform from ${RELEASES}, verify it against sha256sums.txt,\n` +
+    `make it executable and place it there, or point EKORN_CORE at it.`,
 );
 process.exit(2);
