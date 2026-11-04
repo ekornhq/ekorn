@@ -11,6 +11,10 @@ npm i -g ekorn
 ekorn --version
 ```
 
-Pre-release: the core binary is not published yet. Until it is, `ekorn hook ...`
-is a no-op and other commands print where to get the core.
-Project: https://github.com/ekornhq/ekorn
+`ekorn --version` prints two lines: the core's own version (`ekorn-core v0.1.0`,
+or a note that it is not installed) and the launcher's (`ekorn shim 0.1.0`).
+Without the core, `ekorn hook ...` is a silent no-op and every other command
+prints where to get it. The core itself (static binary, five platforms,
+`sha256sums.txt`) is on https://github.com/ekornhq/ekorn/releases; install
+steps and the plugin shells are in the project README:
+https://github.com/ekornhq/ekorn

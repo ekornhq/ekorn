@@ -17,10 +17,14 @@ summary and the full output stays on disk for `ekorn recall`.
 Requirements:
 
 - `ekorn` on `PATH` (`npm i -g ekorn`, `pipx install ekorn` or `cargo install ekorn`)
-  and the core binary at `~/.ekorn/bin/ekorn-core`. Without them every result
-  passes through unchanged.
+  and the core binary (v0.1.0 or later, see the
+  [install steps](../../README.md#install)) at `~/.ekorn/bin/ekorn-core`.
+  Without them every result passes through unchanged. `ekorn --version` prints
+  the core line, then the launcher line.
 - Build before publishing: `npm install && npm run build` (outputs `lib/`).
 
 Status: scaffold, not yet published or run against a live dsh. The hook name
 and return shape follow the official tools subsystem docs; the registration
-call is marked in `src/index.ts` as the thing to verify first.
+call is marked in `src/index.ts` as the thing to verify first. The usage ledger
+(`ekorn report` / `ekorn tune`) only covers harnesses with PostToolUse-style
+hooks, so it stays empty under dsh.
