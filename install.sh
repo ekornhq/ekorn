@@ -1,23 +1,31 @@
 #!/bin/sh
 # ekorn installer: download the ekorn-core binary for this machine from
 # GitHub Releases, verify its SHA-256, and put it in $EKORN_HOME/bin.
-#
-#   curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh -s -- --setup
-#
-# Options:
-#   --setup          also run `ekorn-core setup claude` (Route B in the README;
-#                    do not combine with the Claude Code plugin)
-#   --version vX.Y.Z install that release instead of the latest
-#   -h, --help       show this text
-#
-# Environment: EKORN_HOME (default ~/.ekorn), EKORN_VERSION (same as --version).
+# Run with --help for usage.
 set -eu
 
 REPO="ekornhq/ekorn"
 home="${EKORN_HOME:-$HOME/.ekorn}"
 version="${EKORN_VERSION:-latest}"
 setup=0
+
+usage() {
+    cat <<'USAGE'
+ekorn installer: download the ekorn-core binary for this machine from
+GitHub Releases, verify its SHA-256, and put it in $EKORN_HOME/bin.
+
+  curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh -s -- --setup
+
+Options:
+  --setup          also run `ekorn-core setup claude` (Route B in the README;
+                   do not combine with the Claude Code plugin)
+  --version vX.Y.Z install that release instead of the latest
+  -h, --help       show this text
+
+Environment: EKORN_HOME (default ~/.ekorn), EKORN_VERSION (same as --version).
+USAGE
+}
 
 die() { echo "ekorn install: $*" >&2; exit 1; }
 
@@ -26,7 +34,7 @@ while [ $# -gt 0 ]; do
         --setup) setup=1 ;;
         --version) [ $# -ge 2 ] || die "--version needs a value, e.g. v0.1.0"; version="$2"; shift ;;
         --version=*) version="${1#--version=}" ;;
-        -h|--help) sed -n '2,14p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) usage; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
     shift
