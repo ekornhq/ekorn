@@ -25,6 +25,19 @@ your agent behaves exactly as before.
 ### 1. Core binary (every harness)
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh
+```
+
+[`install.sh`](install.sh) picks the binary for your OS and CPU (Linux and
+macOS), verifies it against `sha256sums.txt`, and puts it in
+`~/.ekorn/bin/ekorn-core`. It installs nothing if the checksum does not match.
+Add `-s -- --setup` after `sh` to also run `ekorn-core setup claude` (Route B
+below), or `-s -- --version v0.1.0` to pin a release. `EKORN_HOME` changes the
+target directory.
+
+The same steps by hand:
+
+```sh
 os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
 mkdir -p ~/.ekorn/bin && cd ~/.ekorn/bin
 curl -fsSLO "https://github.com/ekornhq/ekorn/releases/latest/download/ekorn-core_${os}_${arch}"
