@@ -250,8 +250,15 @@ right error from the two quotes of the receipt. It then answered a second
 time, which is what the refusals are for. Not looked at there: which model the
 sub-agent ran on.
 
+On macOS (GitHub-hosted machines, 2026-11-11: Apple silicon on macOS 26 and
+Intel on macOS 15): the plugin's installer picks the right file, downloads it
+and checks its SHA-256, and the core packs a 6,000-line log, returns the error
+line by its number, verifies a receipt and rejects a quote that is not in the
+log. `npm test` passes there too. The `core-smoke` workflow repeats this
+whenever the plugin changes. Not run there: dsh itself.
+
 Not yet checked: automatic compaction in Desktop; the refusals in Desktop;
-macOS; a provider other than DeepSeek.
+a dsh session on macOS; a provider other than DeepSeek.
 
 `npm test` (from the repository root) covers the packer, the compaction
 decision, the reducer guidance and the refusals against stand-ins.
