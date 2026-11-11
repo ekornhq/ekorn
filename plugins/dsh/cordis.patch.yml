@@ -1,6 +1,9 @@
-# Activated when a dsh profile adds the dsh-ekorn bundle.
+# The dsh-ekorn bundle layer: one plugin row, defaults in the plugin itself.
+# To change a setting, restate the row in your profile's cordis.patch.yml:
+#
+#   - id: ekorn
+#     config:
+#       thresholdBytes: 32768
 - insert:
     - id: ekorn
       name: dsh-ekorn
-      config:
-        thresholdBytes: 16384

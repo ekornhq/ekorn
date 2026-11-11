@@ -61,7 +61,7 @@ your settings is edited.
 | --- | --- | --- |
 | Claude Code | `plugins/claude` | `/plugin marketplace add ekornhq/ekorn` then `/plugin install ekorn@ekorn` |
 | Codex CLI | `plugins/codex` | `codex plugin marketplace add ekornhq/ekorn` then `/plugins` → ekorn; trust the hooks with `/hooks` |
-| DeepSeek Harness | `plugins/dsh` | `dsh plugin --profile web add dsh-ekorn` (after the npm release) |
+| DeepSeek Harness (CLI, Desktop) | `plugins/dsh` | Plugins → Add plugin, or `dsh plugin --profile <name> add`, with `git+https://github.com/ekornhq/ekorn.git#main&path:/plugins/dsh`; details in [plugins/dsh](plugins/dsh/README.md) |
 
 **Route B — manual setup (Claude Code only).** The core edits your Claude Code
 configuration itself: hooks and the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` default

@@ -1,31 +1,31 @@
 {
   "name": "dsh-ekorn",
-  "version": "0.0.1",
-  "description": "ekorn for DeepSeek Harness: lossless, recallable tool-output packing. Large tool results are stored verbatim on your machine and the model sees an exact summary it can recall line by line.",
+  "version": "0.1.0",
+  "description": "Packs large tool results: the full output is stored on your machine and the model sees an exact summary it can fetch back line by line.",
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "index.js",
   "files": [
-    "lib",
-    "cordis.patch.yml"
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json"
   ],
   "license": "MIT",
+  "author": "ekornhq",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ekornhq/ekorn.git",
+    "url": "git+https://github.com/ekornhq/ekorn.git",
     "directory": "plugins/dsh"
   },
   "homepage": "https://github.com/ekornhq/ekorn",
-  "keywords": ["dsh-plugin", "deepseek-harness", "ekorn", "tokens", "context"],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "ekorn",
+    "tokens",
+    "context"
+  ],
   "scripts": {
-    "build": "tsc -p ."
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "*"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "test": "node --test"
   },
   "dsh": {
     "bundle": {
