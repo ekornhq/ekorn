@@ -1,0 +1,11 @@
+{
+  "version": "v0.1.0",
+  "url": "https://github.com/ekornhq/ekorn/releases/download",
+  "sha256": {
+    "ekorn-core_darwin_amd64": "84a6efec4e69031e3cfab7590c2d89fc5dc42dff7afd716d467e9f3658e3af84",
+    "ekorn-core_darwin_arm64": "99b52ceb58c04c69be5284cc180b5fc38a3594c2a467802265566afbe8b47ff4",
+    "ekorn-core_linux_amd64": "d1faa246714c5ce0868cbd4f008891090adf1c7b8d1e65982ad0031cb5c05b10",
+    "ekorn-core_linux_arm64": "0a9069695e678ae05962d99665566e9127289f48ac3335eb992d55de3fd423e2",
+    "ekorn-core_windows_amd64.exe": "9ce938211f18d6e60390102e7721c7e7d8abe6c54313d6663425b3b567c9a695"
+  }
+}

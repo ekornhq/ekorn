@@ -1,0 +1,37 @@
+{
+  "name": "dsh-ekorn",
+  "version": "0.2.0",
+  "description": "ekorn for DeepSeek Harness. Packs large tool results: the full output is stored on your machine and the model sees an exact summary it can fetch back line by line.",
+  "type": "module",
+  "main": "plugins/dsh/index.js",
+  "files": [
+    "plugins/dsh/index.js",
+    "plugins/dsh/core.js",
+    "plugins/dsh/core.json",
+    "plugins/dsh/cordis.patch.yml",
+    "plugins/dsh/README.md",
+    "locale/*.json"
+  ],
+  "license": "MIT",
+  "author": "ekornhq",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ekornhq/ekorn.git"
+  },
+  "homepage": "https://github.com/ekornhq/ekorn",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "ekorn",
+    "tokens",
+    "context"
+  ],
+  "scripts": {
+    "test": "node --test \"plugins/dsh/*.test.js\""
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./plugins/dsh/cordis.patch.yml"
+    }
+  }
+}

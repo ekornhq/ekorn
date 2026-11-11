@@ -17,12 +17,17 @@ The core is published: `ekorn-core` **v0.1.0** is on
 linux/darwin × amd64/arm64 and windows/amd64, with `sha256sums.txt`.
 
 This repository holds the plugin shells and the CLI launchers (all at shell
-version 0.1.0). A shell without the core is a no-op: hooks exit silently and
-your agent behaves exactly as before.
+version 0.1.0; the DeepSeek Harness plugin is 0.2.0). A shell without the core
+is a no-op: hooks exit silently and your agent behaves exactly as before.
 
 ## Install
 
-### 1. Core binary (every harness)
+**DeepSeek Harness:** open **Plugins → Add plugin**, enter
+`https://github.com/ekornhq/ekorn`, and you are done. The plugin fetches the
+core itself on first start (checksum-pinned); skip the steps below. Details in
+[plugins/dsh](plugins/dsh/README.md).
+
+### 1. Core binary (Claude Code, Codex)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ekornhq/ekorn/main/install.sh | sh
@@ -61,7 +66,7 @@ your settings is edited.
 | --- | --- | --- |
 | Claude Code | `plugins/claude` | `/plugin marketplace add ekornhq/ekorn` then `/plugin install ekorn@ekorn` |
 | Codex CLI | `plugins/codex` | `codex plugin marketplace add ekornhq/ekorn` then `/plugins` → ekorn; trust the hooks with `/hooks` |
-| DeepSeek Harness (CLI, Desktop) | `plugins/dsh` | Plugins → Add plugin, or `dsh plugin --profile <name> add`, with `git+https://github.com/ekornhq/ekorn.git#main&path:/plugins/dsh`; details in [plugins/dsh](plugins/dsh/README.md) |
+| DeepSeek Harness (CLI, Desktop) | `plugins/dsh` | Plugins → Add plugin, or `dsh plugin --profile <name> add`, with `https://github.com/ekornhq/ekorn`; no step 1 needed |
 
 **Route B — manual setup (Claude Code only).** The core edits your Claude Code
 configuration itself: hooks and the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` default
@@ -137,7 +142,8 @@ counts, never tool output (archived packs excepted). Delete it whenever you like
 .agents/plugins/marketplace.json  Codex marketplace
 plugins/claude                    Claude Code plugin (hooks, MCP, agent, skill, launcher)
 plugins/codex                     Codex plugin, portable Agent Plugins layout
-plugins/dsh                       DeepSeek Harness plugin (npm bundle, tools/post-execute)
+plugins/dsh                       DeepSeek Harness plugin (tools/post-execute)
+package.json, locale/             DeepSeek Harness bundle manifest, at the root so the repository URL installs
 packages/npm, pypi, crates        `ekorn` launcher for each registry
 .github/workflows/publish-shims.yml
 ```

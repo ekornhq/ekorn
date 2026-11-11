@@ -1,10 +1,13 @@
 // Drives the plugin through a stand-in for the `tools/post-execute` waterfall.
 // The core binary is replaced by a small script, so no ekorn install is needed.
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { assetFor, installCore, release } from './core.js'
 import * as plugin from './index.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'dsh-ekorn-'))
@@ -22,12 +25,34 @@ chmodSync(fake, 0o755)
 function mount(config) {
   const listeners = []
   const warnings = []
+  const infos = []
+  const disposers = []
   const ctx = {
     on: (event, listener) => { assert.equal(event, 'tools/post-execute'); listeners.push(listener) },
-    logger: { warn: message => warnings.push(message) },
+    effect: (setup) => { disposers.push(setup()) },
+    logger: { warn: message => warnings.push(message), info: message => infos.push(message) },
   }
   plugin.apply(ctx, config)
-  return { listener: listeners[0], warnings }
+  return { listener: listeners[0], warnings, infos, disposers }
+}
+
+/** Serve `files` (path → bytes) on a loopback port; anything else is a 404. */
+async function serve(files) {
+  const requests = []
+  const server = createServer((request, response) => {
+    requests.push(request.url)
+    const body = files[request.url]
+    response.writeHead(body === undefined ? 404 : 200).end(body)
+  })
+  await new Promise(done => server.listen(0, '127.0.0.1', done))
+  return { base: `http://127.0.0.1:${server.address().port}`, requests, close: () => server.close() }
+}
+
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+
+async function until(condition) {
+  for (let i = 0; i < 200 && !condition(); i++) await new Promise(done => setTimeout(done, 10))
+  assert.ok(condition(), 'timed out')
 }
 
 const text = (...parts) => parts.map(part => ({ type: 'text', text: part }))
@@ -105,10 +130,100 @@ test('rejects bad config at load and honours EKORN_OFF', () => {
   assert.throws(() => mount({ skipTools: 'read' }), /skipTools/)
   assert.throws(() => mount({ timeoutMs: 0 }), /timeoutMs/)
   assert.throws(() => mount({ core: '' }), /core/)
+  assert.throws(() => mount({ autoInstall: 'yes' }), /autoInstall/)
   process.env.EKORN_OFF = '1'
   try {
     assert.equal(mount({}).listener, undefined)
   } finally {
     delete process.env.EKORN_OFF
+  }
+})
+
+test('names the release file for each platform', () => {
+  assert.equal(assetFor('linux', 'x64'), 'ekorn-core_linux_amd64')
+  assert.equal(assetFor('darwin', 'arm64'), 'ekorn-core_darwin_arm64')
+  assert.equal(assetFor('win32', 'x64'), 'ekorn-core_windows_amd64.exe')
+  assert.equal(assetFor('win32', 'arm64'), undefined)
+  assert.equal(assetFor('freebsd', 'x64'), undefined)
+  assert.match(release.version, /^v\d+\.\d+\.\d+$/)
+  for (const hash of Object.values(release.sha256)) assert.match(hash, /^[0-9a-f]{64}$/)
+})
+
+test('installCore keeps a file only when its checksum matches', async () => {
+  const bytes = Buffer.from('#!/bin/sh\necho core\n')
+  const server = await serve({ '/core': bytes })
+  const home = mkdtempSync(join(tmpdir(), 'dsh-ekorn-core-'))
+  const dest = join(home, 'bin', 'ekorn-core')
+  try {
+    await assert.rejects(installCore(dest, { url: `${server.base}/core`, sha256: '0'.repeat(64) }), /checksum mismatch/)
+    await assert.rejects(installCore(dest, { url: `${server.base}/absent`, sha256: sha256(bytes) }), /HTTP 404/)
+    assert.equal(existsSync(join(home, 'bin')), false)
+    await installCore(dest, { url: `${server.base}/core`, sha256: sha256(bytes) })
+    assert.deepEqual(readFileSync(dest), bytes)
+    assert.equal(statSync(dest).mode & 0o111, 0o111)
+    assert.deepEqual(readdirSync(join(home, 'bin')), ['ekorn-core'])
+  } finally {
+    server.close()
+  }
+})
+
+test('a missing core is installed in the background, then used', async () => {
+  const asset = assetFor()
+  const core = readFileSync(fake)
+  const server = await serve({ [`/v9.9.9/${asset}`]: core })
+  const saved = { ...release, sha256: { ...release.sha256 }, home: process.env.EKORN_HOME }
+  const home = mkdtempSync(join(tmpdir(), 'dsh-ekorn-home-'))
+  Object.assign(release, { version: 'v9.9.9', url: server.base })
+  release.sha256[asset] = sha256(core)
+  process.env.EKORN_HOME = home
+  try {
+    const { listener, warnings, infos, disposers } = mount({ thresholdBytes: 100 })
+    assert.equal(disposers.length, 1)
+    // Until the download lands, results pass through and nothing is logged twice.
+    const inner = { kind: 'accept' }
+    const early = await listener(exec(), { content: text(big) }, async () => inner)
+    await until(() => infos.length === 2)
+    assert.match(infos[0], /downloading http:\/\/127\.0\.0\.1:\d+\/v9\.9\.9\//)
+    assert.match(infos[1], /v9\.9\.9 installed/)
+    assert.ok(early === inner || early.content[0].text.startsWith('[ekorn-pack]'))
+    const decision = await listener(exec(), { content: text(big) }, accept())
+    assert.match(decision.content[0].text, /^\[ekorn-pack\]/)
+    assert.deepEqual(warnings, [])
+
+    // A second start finds the file and asks for nothing.
+    mount({ thresholdBytes: 100 })
+    assert.equal(server.requests.length, 1)
+  } finally {
+    Object.assign(release, { version: saved.version, url: saved.url, sha256: saved.sha256 })
+    if (saved.home === undefined) delete process.env.EKORN_HOME
+    else process.env.EKORN_HOME = saved.home
+    server.close()
+  }
+})
+
+test('a failed download warns once; autoInstall: false and a named core never download', async () => {
+  const server = await serve({})
+  const saved = { url: release.url, home: process.env.EKORN_HOME }
+  release.url = server.base
+  process.env.EKORN_HOME = mkdtempSync(join(tmpdir(), 'dsh-ekorn-home-'))
+  try {
+    const failed = mount({ thresholdBytes: 100 })
+    await until(() => failed.warnings.length === 1)
+    assert.match(failed.warnings[0], /could not install ekorn-core \(HTTP 404\)/)
+    const inner = { kind: 'accept' }
+    assert.equal(await failed.listener(exec(), { content: text(big) }, async () => inner), inner)
+    assert.equal(failed.warnings.length, 1)
+    assert.equal(server.requests.length, 1)
+
+    const off = mount({ thresholdBytes: 100, autoInstall: false })
+    assert.equal(await off.listener(exec(), { content: text(big) }, async () => inner), inner)
+    assert.match(off.warnings[0], /ekorn-core not found/)
+    mount({ thresholdBytes: 100, core: join(dir, 'absent') })
+    assert.equal(server.requests.length, 1)
+  } finally {
+    release.url = saved.url
+    if (saved.home === undefined) delete process.env.EKORN_HOME
+    else process.env.EKORN_HOME = saved.home
+    server.close()
   }
 })

@@ -6,6 +6,10 @@
 // exact summary (head, tail, sizes, and the commands that fetch any part of it
 // back). The model sees the summary; nothing leaves the machine.
 //
+// When no core is installed, the plugin downloads the release pinned in
+// core.json once, checks its SHA-256, and puts it in ~/.ekorn/bin
+// (`autoInstall: false` turns that off).
+//
 // Plain ESM with no dependencies and no build step, so the package installs
 // the same way from npm, a git URL, or a local directory.
 //
@@ -14,30 +18,14 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { assetFor, defaultCorePath, ekornHome, installCore, release } from './core.js'
 
 export const name = 'dsh-ekorn'
 export const inject = ['tools']
 
 const PACKED = '[ekorn-pack]'
-
-/**
- * Where the core binary lives: config.core, else $EKORN_CORE, else
- * $EKORN_HOME/bin/ekorn-core (default ~/.ekorn/bin/ekorn-core).
- * @param {string | undefined} configured
- * @returns {string}
- */
-function corePath(configured) {
-  if (configured) return configured
-  if (process.env.EKORN_CORE) return process.env.EKORN_CORE
-  return join(ekornHome(), 'bin', process.platform === 'win32' ? 'ekorn-core.exe' : 'ekorn-core')
-}
-
-/** @returns {string} */
-function ekornHome() {
-  return process.env.EKORN_HOME || join(homedir(), '.ekorn')
-}
+const MANUAL = 'Manual install: https://github.com/ekornhq/ekorn#install'
 
 /**
  * Environment for the core. Each dsh session gets its own archive and ledger
@@ -55,7 +43,7 @@ function coreEnv(session) {
  * @param {Record<string, unknown>} config
  */
 function resolve(config) {
-  const { thresholdBytes = 16 * 1024, skipTools = ['read'], timeoutMs = 10_000, core } = config
+  const { thresholdBytes = 16 * 1024, skipTools = ['read'], timeoutMs = 10_000, core, autoInstall = true } = config
   if (!Number.isSafeInteger(thresholdBytes) || thresholdBytes < 0) {
     throw new Error(`dsh-ekorn: thresholdBytes must be a non-negative integer (got ${String(thresholdBytes)})`)
   }
@@ -68,7 +56,38 @@ function resolve(config) {
   if (core !== undefined && (typeof core !== 'string' || core === '')) {
     throw new Error('dsh-ekorn: core must be a path to the ekorn-core binary')
   }
-  return { thresholdBytes, skip: new Set(skipTools), timeoutMs, core: corePath(core) }
+  if (typeof autoInstall !== 'boolean') {
+    throw new Error('dsh-ekorn: autoInstall must be true or false')
+  }
+  // A path the user named is theirs to fill; only the default location is installed into.
+  const named = core ?? (process.env.EKORN_CORE || undefined)
+  return {
+    thresholdBytes, skip: new Set(skipTools), timeoutMs,
+    core: named ?? defaultCorePath(),
+    autoInstall: autoInstall && named === undefined,
+  }
+}
+
+/**
+ * Fetch the pinned core release into `dest` in the background. The outcome is
+ * logged; until the file is there, tool results pass through unchanged.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ * @param {string} dest
+ */
+function fetchCore(ctx, dest) {
+  const asset = assetFor()
+  if (asset === undefined) {
+    ctx.logger?.warn?.(`dsh-ekorn: no ekorn-core build for ${process.platform}/${process.arch}; tool results pass through unchanged.`)
+    return
+  }
+  const url = `${release.url}/${release.version}/${asset}`
+  const stop = new AbortController()
+  ctx.effect?.(() => () => stop.abort())
+  ctx.logger?.info?.(`dsh-ekorn: ekorn-core is not installed; downloading ${url} to ${dest}`)
+  installCore(dest, { url, sha256: release.sha256[asset], signal: AbortSignal.any([stop.signal, AbortSignal.timeout(120_000)]) }).then(
+    () => ctx.logger?.info?.(`dsh-ekorn: ekorn-core ${release.version} installed, checksum verified`),
+    error => ctx.logger?.warn?.(`dsh-ekorn: could not install ekorn-core (${error?.message ?? error}); tool results pass through unchanged. ${MANUAL}`),
+  )
 }
 
 /**
@@ -124,12 +143,14 @@ function absoluteRecall(summary, core) {
 /**
  * Mount the packer on accepted, text-only tool results.
  * @param {import('@deepseek-ai/cordis').Context} ctx
- * @param {Record<string, unknown>} [config] thresholdBytes, skipTools, timeoutMs, core
+ * @param {Record<string, unknown>} [config] thresholdBytes, skipTools, timeoutMs, core, autoInstall
  */
 export function apply(ctx, config = {}) {
   if (process.env.EKORN_OFF === '1') return
   const options = resolve(config ?? {})
-  let warned = false
+  // fetchCore reports a missing core itself, so the listener stays quiet then.
+  let warned = options.autoInstall
+  if (options.autoInstall && !existsSync(options.core)) fetchCore(ctx, options.core)
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
@@ -143,7 +164,7 @@ export function apply(ctx, config = {}) {
     if (!existsSync(options.core)) {
       if (!warned) {
         warned = true
-        ctx.logger?.warn?.(`dsh-ekorn: ekorn-core not found at ${options.core}; tool results pass through unchanged. Install: https://github.com/ekornhq/ekorn#install`)
+        ctx.logger?.warn?.(`dsh-ekorn: ekorn-core not found at ${options.core}; tool results pass through unchanged. ${MANUAL}`)
       }
       return decision
     }
