@@ -17,7 +17,7 @@ const seen = join(dir, 'seen')
 const fake = join(dir, 'fake core')
 writeFileSync(fake, `#!/bin/sh
 printf '%s|%s' "$*" "$EKORN_STORE" > '${seen}'
-n=$(wc -c)
+n=$(($(wc -c)))
 [ "$n" -lt 200 ] && { echo small; exit 0; }
 printf '[ekorn-pack] x %s bytes\\nrecall: ekorn recall obs_1 --offset 0\\n--- head ---\\nekorn recall stays\\n' "$n"
 `)
