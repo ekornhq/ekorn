@@ -25,8 +25,9 @@ Other sources work too:
 | Local checkout | the absolute path of the repository root, e.g. `/home/you/ekorn` |
 | npm | `dsh-ekorn` (once it is published) |
 
-The plugin is plain JavaScript with no dependencies and no build step, so a
-git install needs no build-script permission.
+Installing from a GitHub address needs `git` on the machine; dsh reports a
+failed install without it. The plugin is plain JavaScript with no dependencies
+and no build step, so a git install needs no build-script permission.
 
 ### The core binary
 
