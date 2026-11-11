@@ -1,0 +1,61 @@
+name: core-smoke
+
+# Checks that the ekorn-core release the dsh plugin pins really runs on each
+# kind of machine: the plugin's own installer picks the file, downloads it and
+# checks its SHA-256, then the binary packs a log, fetches lines back and
+# verifies a receipt. Also runs the plugin's tests there. Needs no secrets.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - plugins/dsh/**
+      - package.json
+      - .github/scripts/core-smoke.sh
+      - .github/workflows/core-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS, Apple silicon
+            os: macos-latest
+            asset: ekorn-core_darwin_arm64
+          - name: macOS, Intel
+            os: macos-15-intel
+            asset: ekorn-core_darwin_amd64
+          - name: Linux
+            os: ubuntu-latest
+            asset: ekorn-core_linux_amd64
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Machine
+        run: |
+          uname -sm
+          sw_vers 2>/dev/null || true
+      - name: Install the pinned core as the plugin does
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          node --input-type=module -e "
+          import { assetFor, defaultCorePath, installCore, release } from './plugins/dsh/core.js'
+          const asset = assetFor()
+          if (asset !== process.env.ASSET) throw new Error('expected ' + process.env.ASSET + ', the plugin chose ' + asset)
+          await installCore(defaultCorePath(), { url: release.url + '/' + release.version + '/' + asset, sha256: release.sha256[asset] })
+          console.log('installed', asset, release.version, 'at', defaultCorePath(), '(checksum verified)')
+          "
+      - name: Run the core
+        run: sh .github/scripts/core-smoke.sh "$HOME/.ekorn/bin/ekorn-core"
+      - name: Plugin tests
+        run: npm test
