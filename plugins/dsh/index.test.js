@@ -7,8 +7,10 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { decide } from './compact.js'
 import { assetFor, installCore, release } from './core.js'
 import * as plugin from './index.js'
+import { guide } from './reducer.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'dsh-ekorn-'))
 const seen = join(dir, 'seen')
@@ -22,18 +24,22 @@ printf '[ekorn-pack] x %s bytes\\nrecall: ekorn recall obs_1 --offset 0\\n--- he
 chmodSync(fake, 0o755)
 
 /** Mount the plugin and return its listener. */
-function mount(config) {
-  const listeners = []
+function mount(config, services = {}) {
+  const listeners = {}
   const warnings = []
   const infos = []
   const disposers = []
+  const children = []
   const ctx = {
-    on: (event, listener) => { assert.equal(event, 'tools/post-execute'); listeners.push(listener) },
+    on: (event, listener) => { listeners[event] = listener },
+    get: service => services[service],
+    plugin: child => children.push(child),
     effect: (setup) => { disposers.push(setup()) },
     logger: { warn: message => warnings.push(message), info: message => infos.push(message) },
   }
-  plugin.apply(ctx, config)
-  return { listener: listeners[0], warnings, infos, disposers }
+  // Compaction has its own tests below; the packer tests run without it.
+  plugin.apply(ctx, { autoCompact: false, ...config })
+  return { listener: listeners['tools/post-execute'], listeners, warnings, infos, disposers, children }
 }
 
 /** Serve `files` (path → bytes) on a loopback port; anything else is a 404. */
@@ -131,6 +137,8 @@ test('rejects bad config at load and honours EKORN_OFF', () => {
   assert.throws(() => mount({ timeoutMs: 0 }), /timeoutMs/)
   assert.throws(() => mount({ core: '' }), /core/)
   assert.throws(() => mount({ autoInstall: 'yes' }), /autoInstall/)
+  assert.throws(() => mount({ autoCompact: 1 }), /autoCompact/)
+  assert.throws(() => mount({ cacheRatio: 0.5 }), /cacheRatio/)
   process.env.EKORN_OFF = '1'
   try {
     assert.equal(mount({}).listener, undefined)
@@ -226,4 +234,148 @@ test('a failed download warns once; autoInstall: false and a named core never do
     else process.env.EKORN_HOME = saved.home
     server.close()
   }
+})
+
+test('decide compares the price of compacting with what it saves', () => {
+  const flash = { kept: 10_000, summary: 3_000, miss: 50, output: 200 }
+  // Too small to touch: under the floor, under a third of the context, or nothing to gain.
+  assert.equal(decide({ ...flash, context: 200_000, requests: 500, floor: 250_000 }).compact, false)
+  assert.equal(decide({ ...flash, context: 15_000, requests: 500 }).compact, false)
+  assert.equal(decide({ ...flash, context: 10_000, requests: 500 }).compact, false)
+  // 100K, fully cached: (100K read + 3K * 200 written + 3K * 49 read uncached) / 87K saved = 9.7 requests.
+  const warm = decide({ ...flash, context: 100_000, requests: 9 })
+  assert.equal(warm.compact, false)
+  assert.equal(Math.round(warm.breakeven * 10), 97)
+  assert.equal(decide({ ...flash, context: 100_000, requests: 10 }).compact, true)
+  // Cheaper output and misses pay back sooner; a longer summary later.
+  assert.ok(decide({ ...flash, miss: 30, output: 90, context: 100_000, requests: 0 }).breakeven < warm.breakeven)
+  assert.ok(decide({ ...flash, summary: 10_000, context: 100_000, requests: 0 }).breakeven > 30)
+  // A cache that never hits pays back at once, but never before five requests.
+  const cold = decide({ ...flash, context: 100_000, requests: 4, hit: 0 })
+  assert.ok(cold.breakeven < 2)
+  assert.equal(cold.compact, false)
+  assert.equal(decide({ ...flash, context: 100_000, requests: 5, hit: 0 }).compact, true)
+})
+
+/** A session whose requests each add `step` tokens to a fully cached context. */
+function drive(mounted, { provider = 'deepseek-official', model = 'deepseek-flash' } = {}) {
+  const session = { requestHeader: () => ({ config: { provider, model } }) }
+  const agent = { session }
+  let context = 0
+  return {
+    agent,
+    async request(total) {
+      mounted.listeners['session/event'](session, {
+        type: 'assistant/message',
+        data: { usage: { inputTokens: total - context, cacheReadTokens: context, outputTokens: 10 } },
+      })
+      context = total
+      await new Promise(done => setImmediate(done)) // lets the context-window lookup settle
+    },
+    idle: () => mounted.listeners['agent/status']({ agent, status: 'idle' }),
+    compacted(total) { context = 0; return this.request(total) },
+  }
+}
+
+test('compacts at idle once the saving pays for itself, through either service', async () => {
+  const calls = []
+  const llm = { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) }
+  const compaction = { compactNow: async (agent, signal) => { calls.push([agent, signal.aborted]); return { summarySeq: 1 } } }
+  const mounted = mount({ core: fake, autoCompact: true }, { llm, compaction })
+  const run = drive(mounted)
+  for (let i = 1; i <= 20; i++) await run.request(10_000 + i * 10_000) // 210K after 20 requests
+  mounted.listeners['agent/status']({ agent: run.agent, status: 'running' })
+  run.idle()
+  assert.equal(calls.length, 0) // under a quarter of the 1M window
+  for (let i = 21; i <= 30; i++) await run.request(10_000 + i * 10_000) // 310K after 30
+  run.idle()
+  run.idle() // a second idle while the first compaction runs does nothing
+  assert.deepEqual(calls, [[run.agent, false]])
+  await until(() => mounted.infos.length === 1)
+  assert.match(mounted.infos[0], /compacted a 310000-token context after 30 requests; expected to pay for itself in 4 \(uncached price ratio 50, cache hit share 1\.00\)/)
+
+  // The smaller context that follows shows the size of a summary (5K here),
+  // and the count of requests starts over: no second compaction right away.
+  await run.compacted(25_000)
+  await run.request(260_000)
+  run.idle()
+  assert.equal(calls.length, 1) // two requests since the compaction
+  for (const total of [270_000, 280_000, 290_000]) await run.request(total)
+  run.idle()
+  assert.equal(calls.length, 1) // five requests; 290K with a 5K summary takes 5.8
+  await run.request(300_000)
+  run.idle()
+  assert.equal(calls.length, 2)
+
+  // Desktop: the service lives inside the agent's preset.
+  const inner = { compactNow: async () => null }
+  const presets = mount({ core: fake, autoCompact: true }, { llm, agentPresets: { serviceFor: (agent, name) => name === 'compaction' ? inner : undefined } })
+  const desktop = drive(presets)
+  for (let i = 1; i <= 50; i++) await desktop.request(10_000 + i * 10_000)
+  let asked = 0
+  inner.compactNow = async () => { asked++; return null }
+  desktop.idle()
+  await until(() => asked === 1)
+  desktop.idle() // nothing to compact: waits for ten more requests
+  assert.equal(asked, 1)
+  assert.deepEqual(presets.warnings, [])
+})
+
+test('leaves unknown models and unreachable services alone', async () => {
+  const llm = { resolveModelInfo: async () => ({ context: { contextWindow: 1_000_000 } }) }
+  const calls = []
+  const compaction = { compactNow: async () => { calls.push(1); return {} } }
+  const unknown = drive(mount({ core: fake, autoCompact: true }, { llm, compaction }), { provider: 'other', model: 'm' })
+  for (let i = 1; i <= 60; i++) await unknown.request(i * 10_000)
+  unknown.idle()
+  assert.equal(calls.length, 0)
+
+  // cacheRatio covers a model that is not in the table.
+  const named = drive(mount({ core: fake, autoCompact: true, cacheRatio: 10 }, { llm, compaction }), { provider: 'other', model: 'm' })
+  for (let i = 1; i <= 60; i++) await named.request(i * 10_000)
+  named.idle()
+  assert.equal(calls.length, 1)
+
+  const bare = mount({ core: fake, autoCompact: true }, { llm })
+  const lone = drive(bare)
+  for (let i = 1; i <= 60; i++) await lone.request(i * 10_000)
+  lone.idle()
+  lone.idle()
+  assert.equal(bare.warnings.length, 1)
+  assert.match(bare.warnings[0], /no compaction service/)
+
+  // A failure that is not a race turns it off for the session; a race does not.
+  const failing = { compactNow: async () => { throw Object.assign(new Error('boom'), { code: 'summary' }) } }
+  const broken = mount({ core: fake, autoCompact: true }, { llm, compaction: failing })
+  const session = drive(broken)
+  for (let i = 1; i <= 60; i++) await session.request(i * 10_000)
+  session.idle()
+  await until(() => broken.warnings.length === 1)
+  assert.match(broken.warnings[0], /failed \(boom\); off for this session/)
+  let tries = 0
+  failing.compactNow = async () => { tries++; throw Object.assign(new Error('busy'), { code: 'busy' }) }
+  session.idle()
+  assert.equal(tries, 0)
+})
+
+test('the log reducer guidance shows only where the tool is visible', () => {
+  const { children } = mount({ core: fake })
+  assert.equal(children.length, 1)
+  assert.deepEqual(children[0].inject, ['systemPrompt', 'tools'])
+  const sections = []
+  const visible = new Set()
+  children[0].apply({
+    systemPrompt: { getSectionOrder: () => 7, section: section => sections.push(section) },
+    tools: { get: (name, scope) => visible.has(scope) ? { name } : undefined },
+  })
+  const [section] = sections
+  assert.equal(section.name, 'ekorn:log-reducer')
+  assert.equal(section.order, 7)
+  assert.equal(section.text({ scope: 'desktop agent' }), '')
+  visible.add('cli agent')
+  const text = section.text({ scope: 'cli agent' })
+  assert.equal(text, guide(fake))
+  assert.ok(text.includes('LOG-REDUCE source=<absolute path> question='))
+  // The core path has a space in it, so the verify command quotes it.
+  assert.ok(text.includes(`${JSON.stringify(fake)} verify --source`))
 })

@@ -6,6 +6,10 @@
 // exact summary (head, tail, sizes, and the commands that fetch any part of it
 // back). The model sees the summary; nothing leaves the machine.
 //
+// It also compacts a session when the model's cache prices say that pays off
+// (compact.js; `autoCompact: false` turns that off), and tells the model how to
+// use the `log_reducer` sub-agent that the bundle layer adds (reducer.js).
+//
 // When no core is installed, the plugin downloads the release pinned in
 // core.json once, checks its SHA-256, and puts it in ~/.ekorn/bin
 // (`autoInstall: false` turns that off).
@@ -19,7 +23,9 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { autoCompact } from './compact.js'
 import { assetFor, defaultCorePath, ekornHome, installCore, release } from './core.js'
+import { logReducer } from './reducer.js'
 
 export const name = 'dsh-ekorn'
 export const inject = ['tools']
@@ -43,7 +49,10 @@ function coreEnv(session) {
  * @param {Record<string, unknown>} config
  */
 function resolve(config) {
-  const { thresholdBytes = 16 * 1024, skipTools = ['read'], timeoutMs = 10_000, core, autoInstall = true } = config
+  const {
+    thresholdBytes = 16 * 1024, skipTools = ['read'], timeoutMs = 10_000, core, autoInstall = true,
+    autoCompact: compact = true, cacheRatio,
+  } = config
   if (!Number.isSafeInteger(thresholdBytes) || thresholdBytes < 0) {
     throw new Error(`dsh-ekorn: thresholdBytes must be a non-negative integer (got ${String(thresholdBytes)})`)
   }
@@ -59,12 +68,19 @@ function resolve(config) {
   if (typeof autoInstall !== 'boolean') {
     throw new Error('dsh-ekorn: autoInstall must be true or false')
   }
+  if (typeof compact !== 'boolean') {
+    throw new Error('dsh-ekorn: autoCompact must be true or false')
+  }
+  if (cacheRatio !== undefined && !(Number.isFinite(cacheRatio) && cacheRatio >= 1)) {
+    throw new Error(`dsh-ekorn: cacheRatio must be a number of at least 1 (got ${String(cacheRatio)})`)
+  }
   // A path the user named is theirs to fill; only the default location is installed into.
   const named = core ?? (process.env.EKORN_CORE || undefined)
   return {
     thresholdBytes, skip: new Set(skipTools), timeoutMs,
     core: named ?? defaultCorePath(),
     autoInstall: autoInstall && named === undefined,
+    autoCompact: compact, cacheRatio,
   }
 }
 
@@ -143,7 +159,7 @@ function absoluteRecall(summary, core) {
 /**
  * Mount the packer on accepted, text-only tool results.
  * @param {import('@deepseek-ai/cordis').Context} ctx
- * @param {Record<string, unknown>} [config] thresholdBytes, skipTools, timeoutMs, core, autoInstall
+ * @param {Record<string, unknown>} [config] thresholdBytes, skipTools, timeoutMs, core, autoInstall, autoCompact, cacheRatio
  */
 export function apply(ctx, config = {}) {
   if (process.env.EKORN_OFF === '1') return
@@ -151,6 +167,8 @@ export function apply(ctx, config = {}) {
   // fetchCore reports a missing core itself, so the listener stays quiet then.
   let warned = options.autoInstall
   if (options.autoInstall && !existsSync(options.core)) fetchCore(ctx, options.core)
+  if (options.autoCompact) autoCompact(ctx, options)
+  logReducer(ctx, options.core)
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()

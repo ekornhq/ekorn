@@ -1,12 +1,14 @@
 {
   "name": "dsh-ekorn",
-  "version": "0.2.0",
-  "description": "ekorn for DeepSeek Harness. Packs large tool results: the full output is stored on your machine and the model sees an exact summary it can fetch back line by line.",
+  "version": "0.3.0",
+  "description": "ekorn for DeepSeek Harness. Saves tokens three ways: large tool results are stored on your machine and the model sees an exact summary it can fetch back line by line; long sessions are compacted when the model's cache prices say it pays off; long logs are read by a sub-agent on the cheaper model.",
   "type": "module",
   "main": "plugins/dsh/index.js",
   "files": [
     "plugins/dsh/index.js",
     "plugins/dsh/core.js",
+    "plugins/dsh/compact.js",
+    "plugins/dsh/reducer.js",
     "plugins/dsh/core.json",
     "plugins/dsh/cordis.patch.yml",
     "plugins/dsh/README.md",

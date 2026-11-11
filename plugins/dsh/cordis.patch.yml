@@ -1,4 +1,5 @@
-# The dsh-ekorn bundle layer: one plugin row, defaults in the plugin itself.
+# The dsh-ekorn bundle layer: the plugin row (defaults in the plugin itself) and
+# the log reducer, a row of dsh's own sub-agent tool fixed to the cheaper model.
 # To change a setting, restate the row in your profile's cordis.patch.yml:
 #
 #   - id: ekorn
@@ -7,3 +8,10 @@
 - insert:
     - id: ekorn
       name: dsh-ekorn
+    - id: ekorn-log-reducer
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: log_reducer
+        agentOptions:
+          model: deepseek-flash
