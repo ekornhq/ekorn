@@ -28,7 +28,7 @@ Other sources work too:
 | --- | --- |
 | A pinned commit | `https://github.com/ekornhq/ekorn#<commit hash>` |
 | Local checkout | the absolute path of the repository root, e.g. `/home/you/ekorn` |
-| npm | `dsh-ekorn` (once it is published) |
+| npm | `dsh-ekorn` |
 
 Installing from a GitHub address needs `git` on the machine; dsh reports a
 failed install without it. The plugin is plain JavaScript with no dependencies
