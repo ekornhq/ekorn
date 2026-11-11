@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 
 export const TOOL = 'log_reducer'
 const MARK = 'LOG-REDUCE'
+const STARTED = /^started subagent (\S+)/
 
 /**
  * The guidance text.
@@ -33,16 +34,54 @@ If your own task starts with ${MARK}, you are the reducer. Your product is a rec
 2. Search it with \`grep\` and read parts with \`read\` and a line range. Never read it whole.
 3. Write a JSON receipt file under ${tmp}, not in the project: {"status":"success|failure","uncertain":false,"evidence":[{"kind":"fatal|failure|warning|target|summary","quote":"<text>"}]}. At most 12 quotes of at most 600 characters. Each quote is one continuous piece of the source copied character for character, without line numbers. Prefer the first fatal error that looks like the root cause, then unique error signatures, failed targets or tests, useful warnings, the final summary line. Set uncertain to true when the source shows no clear failure signal.
 4. Run \`${bin} verify --source <absolute path> --receipt <receipt file>\`. If it prints REJECTED, fix the receipt and run it again. Do not answer before it passes.
-5. Answer with the receipt the verifier printed, unchanged, and the source path. No diagnosis, no fixes, no suggested commands. Give the answer as your closing message only; do not also send it with a messaging tool.`
+5. End your turn with the receipt the verifier printed, unchanged, and the source path, as your final reply. It is delivered to the caller automatically, so never send it with \`send_message\`. No diagnosis, no fixes, no suggested commands.`
 }
 
 /**
  * Register the guidance where dsh has a system prompt service. The text is
  * empty for an agent that cannot see the tool.
+ *
+ * Also keeps the two sides from messaging each other. dsh delivers a
+ * sub-agent's final reply to its parent by itself; a message the sub-agent
+ * sends just before finishing wakes the parent once more, and it answers
+ * twice. A parent that polls or messages a running reducer spends requests
+ * and learns nothing. Both calls are refused with the reason to wait.
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {string} core
  */
 export function logReducer(ctx, core) {
+  /** Ids of the sub-agents `log_reducer` started in this process. */
+  const reducers = new Set()
+
+  ctx.on('tools/post-execute', async (exec, result, next) => {
+    const decision = await next()
+    if (exec?.name !== TOOL) return decision
+    // The structured value names the sub-agent; its field changed between dsh versions, the text did not.
+    const started = STARTED.exec((decision?.content ?? result?.content ?? []).map(block => block.text ?? '').join(''))?.[1]
+      ?? result?.value?.subagentId ?? result?.value?.name
+    if (typeof started === 'string') reducers.add(started)
+    return decision
+  })
+
+  ctx.on('tools/pre-execute', (exec, next) => {
+    if (reducers.size === 0) return next()
+    const args = exec?.arguments ?? {}
+    if (exec?.name === 'send_message' && reducers.has(exec.agent?.id)) {
+      return {
+        kind: 'deny',
+        reason: 'Do not send messages. Your final reply is delivered to the caller automatically: end your turn now, with the verified receipt and the source path as your final reply.',
+      }
+    }
+    const target = exec?.name === 'send_message' ? args.agent_id ?? args.agent
+      : exec?.name === 'job_output' || exec?.name === 'job_kill' ? args.job_id
+        : undefined
+    if (!reducers.has(target)) return next()
+    return {
+      kind: 'deny',
+      reason: `${TOOL} cannot be polled, messaged or stopped. Its answer arrives by itself when it finishes: end your turn now and wait, without reading the source yourself. For another question, call ${TOOL} again.`,
+    }
+  })
+
   ctx.plugin?.({
     name: 'dsh-ekorn/log-reducer',
     inject: ['systemPrompt', 'tools'],

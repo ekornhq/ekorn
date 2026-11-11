@@ -31,7 +31,11 @@ function mount(config, services = {}) {
   const disposers = []
   const children = []
   const ctx = {
-    on: (event, listener) => { listeners[event] = listener },
+    // Two listeners on one event are waterfall stages: they run in the order registered.
+    on: (event, listener) => {
+      const earlier = listeners[event]
+      listeners[event] = earlier === undefined ? listener : (...args) => earlier(...args.slice(0, -1), () => listener(...args))
+    },
     get: service => services[service],
     plugin: child => children.push(child),
     effect: (setup) => { disposers.push(setup()) },
@@ -378,4 +382,36 @@ test('the log reducer guidance shows only where the tool is visible', () => {
   assert.ok(text.includes('LOG-REDUCE source=<absolute path> question='))
   // The core path has a space in it, so the verify command quotes it.
   assert.ok(text.includes(`${JSON.stringify(fake)} verify --source`))
+})
+
+test('a reducer and its caller may not message each other', async () => {
+  const { listeners } = mount({ core: fake })
+  const gate = listeners['tools/pre-execute']
+  const allow = async () => ({ kind: 'allow' })
+  const child = { id: 'r1' }, other = { id: 'x9' }, root = { id: 'session-1' }
+  const call = (agent, name, args) => gate({ name, agent, arguments: args }, allow)
+  const send = (agent, to) => call(agent, 'send_message', { agent_id: to, message: 'the cause is on line 4218' })
+
+  // Before any reducer was started nothing is refused.
+  assert.deepEqual(await send(child, 'root'), { kind: 'allow' })
+
+  const accept = { kind: 'accept' }
+  const started = (name, text) => listeners['tools/post-execute']({ name, agent: root }, { content: [{ type: 'text', text }] }, async () => accept)
+  assert.equal(await started('spawn', 'started subagent x9'), accept)
+  assert.equal(await started('log_reducer', 'started subagent r1'), accept)
+
+  const fromChild = await send(child, 'root')
+  assert.equal(fromChild.kind, 'deny')
+  assert.match(fromChild.reason, /final reply is delivered to the caller automatically/)
+  for (const denied of [await send(root, 'r1'), await call(root, 'send_message', { agent: 'r1', message: 'hurry' }), await call(root, 'job_output', { job_id: 'r1', wait: true }), await call(root, 'job_kill', { job_id: 'r1' })]) {
+    assert.equal(denied.kind, 'deny')
+    assert.match(denied.reason, /end your turn now and wait/)
+  }
+  // Everything else goes through: the reducer's other tools, other sub-agents, other targets, a call with no agent.
+  assert.deepEqual(await call(child, 'bash', { command: 'true' }), { kind: 'allow' })
+  assert.deepEqual(await send(other, 'root'), { kind: 'allow' })
+  assert.deepEqual(await send(root, 'x9'), { kind: 'allow' })
+  assert.deepEqual(await call(root, 'job_output', { job_id: 'j7' }), { kind: 'allow' })
+  assert.deepEqual(await call(root, 'list_agents', { scope: 'children' }), { kind: 'allow' })
+  assert.deepEqual(await call(undefined, 'send_message', { agent_id: 'root', message: 'hi' }), { kind: 'allow' })
 })

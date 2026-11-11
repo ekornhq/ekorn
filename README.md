@@ -107,7 +107,7 @@ Two more things keep large content out:
 | Compaction by cache price, automatic | no | no | yes, for `deepseek-flash` and `deepseek-v4-pro` |
 | Ledger, report, suggestions | every shell and read call | every shell call | packed results and recalls |
 | Core binary | you install it (one command) | you install it (one command) | the plugin installs it |
-| Checked on | Linux, in daily use | not yet run in a live Codex install | Linux command line with dsh 0.2.2-rc.1, including compaction and the log reducer against the real DeepSeek API; not yet Desktop, macOS or Windows |
+| Checked on | Linux, in daily use | not yet run in a live Codex install | Linux command line with dsh 0.2.2-rc.1, including compaction and the log reducer against the real DeepSeek API; Desktop on Windows for the install and the log reducer (reported by a user); not yet macOS |
 
 ## Install
 

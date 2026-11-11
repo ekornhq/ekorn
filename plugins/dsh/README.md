@@ -143,6 +143,12 @@ that is not in the file.
 The plugin adds the instructions for both sides to the system prompt, and only
 for agents that can see the tool.
 
+The sub-agent's answer reaches the session by itself when the sub-agent
+finishes. The plugin refuses the calls that get in the way of that: a message
+from the reducer to the session (dsh wakes the session for the message and
+again for the finish, so it answers twice), and the session polling, messaging
+or stopping a reducer it started. Each refusal tells the model to end its turn.
+
 On a session that already runs on `deepseek-flash` the price per token is the
 same; what is saved is the main conversation's context. The model is given
 without a provider, so the sub-agent uses the session's provider: with a
@@ -228,15 +234,24 @@ Checked with dsh 0.2.2-rc.1 on Linux, command-line (`headless`) profile:
   three-turn run used an earlier version of it, which would not have compacted
   at 314K; what they show about dsh's compaction itself still holds.
 
-Seen in those runs: the main model sometimes polls the sub-agent before it
-waits, and the sub-agent sometimes sends its answer as a message and again as
-its closing message. Both cost a few small requests and do not change the
-result.
+In the earlier of those runs the main model sometimes polled the sub-agent, and
+the sub-agent sometimes sent its answer as a message before finishing, which
+made the session answer twice. The plugin now refuses both calls. In the two
+runs after that change the session answered once; in one of them both refusals
+fired (the session's `job_output`, the reducer's `send_message`) and both
+models then did as told. Still possible: the main model searching the log
+itself while it waits, seen in two of the three runs before the change and in
+neither after.
 
-Not yet checked: Desktop on any system (the `web` profile starts with the
-layer, but whether agents inside a Desktop preset see `log_reducer` and
-trigger the compaction is untested); macOS and Windows; a provider other than
-DeepSeek.
+On Windows, in Desktop (reported by a user, 2026-11-11, before that change):
+the plugin installs from the repository URL, and a session given a 6,000-line
+log called `log_reducer` without being told to, waited for it, and named the
+right error from the two quotes of the receipt. It then answered a second
+time, which is what the refusals are for. Not looked at there: which model the
+sub-agent ran on.
+
+Not yet checked: automatic compaction in Desktop; the refusals in Desktop;
+macOS; a provider other than DeepSeek.
 
 `npm test` (from the repository root) covers the packer, the compaction
-decision and the reducer guidance against stand-ins.
+decision, the reducer guidance and the refusals against stand-ins.
